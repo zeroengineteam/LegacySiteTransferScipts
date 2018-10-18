@@ -29,16 +29,17 @@ print("=========")
 me = phab.user.whoami()
 print(me)
 
-phab_tasks_fileName = "phab_tasks.json"
-file_repo_url = "https://github.com/zeroengineteam/ZeroFiles/task_files/"
 
 fileIDToFileExt = {}
 
 def GetPhabTask(outfile, cursorAfter):
-    #query key for open zero engine tagged tasks on old dev.zeroengine.io
-    queryKey = "xdRHwRHZaSkp"
+    #query key for zero engine tagged tasks on old dev.zeroengine.io
+    #queryKey = "xdRHwRHZaSkp"
+    #just tagged with #zero_engine
+    queryKey = "gn0V6E98Bu2_"
     constraints = {}
-    constraints["statuses"] = ["open"]
+
+    constraints["statuses"] = ["resolved"]
     attachments = {}
     attachments["subscribers"] = True
     attachments["projects"] = True
@@ -77,11 +78,10 @@ def TrimFileID(rawFileRef):
 
 #Returns list of file IDs found in the serialized task json file
 def GetFileIDs(infile):
-    fileIDRegEx = "(\{)(\s*?)(F\d.*?)(\s*?)(,\s*?size=full\s*?|\s*?size=full\s*?|)(\})"
+    fileIDRegEx = "(\{)(\s*?)F(\d.*?)(\s*?)(,\s*?size=full\s*?|\s*?size=full\s*?|)(\})"
     taskData = infile.read();
     fileIDMatches = re.findall(fileIDRegEx, taskData)
     fileIDs = []
-
     for match in fileIDMatches:
         trimmedID = match[2]
         print(trimmedID)
@@ -90,7 +90,7 @@ def GetFileIDs(infile):
     return fileIDs
 
 def GetNewFileURL(fileID):
-  return file_repo_url + fileID
+  return "https://github.com/zeroengineteam/ZeroFiles/task_files/" + fileID
 
 #Takes the file ID list returned by GetFileIDs and downloads all files from phabricator in a folder structure reflecting task IDs
 def DownloadFilesFromPhabricator(fileIDs):
@@ -99,34 +99,34 @@ def DownloadFilesFromPhabricator(fileIDs):
 
     constraints = {}
     currentID = fileIDs[0]
-    constraints["ids"] = [int(currentID[1:])];
+    constraints["ids"] = [int(currentID)];
     response = None
 
     idsToFileNames = {}
 
     try:
-        print("Searching for meta data for file with ID: " + str(constraints["ids"])) 
+        print("Searching for data for file with ID: " + str(constraints["ids"])) 
         response = phab.file.search(constraints=constraints)
     except APIError:
         print("APIError in DownloadFilesFromPhabricator CurrentID: " + str(constraints["ids"]))
         print(APIError.message)
         return {}
     else:
-      data = response.data
-      for fileData in data:
-          fields = fileData["fields"]
-          name = fields["name"]
-          dataURI = fields["dataURI"]
-          GetAndWriteFileData(name, currentID, dataURI)
-          idsToFileNames[name] = currentID
-          fileIDToFileExt[currentID] = name[-4:]
+        data = response.data
+        for fileData in data:
+            fields = fileData["fields"]
+            name = fields["name"]
+            dataURI = fields["dataURI"]
+            GetAndWriteFileData(name, currentID, dataURI)
+            idsToFileNames[name] = currentID
+            fileIDToFileExt[currentID] = name[-4:]
 
       results = DownloadFilesFromPhabricator(fileIDs[1:])
       return {**idsToFileNames, **results}
 
 #Writes streamed file data to disk, data may come in multiple responses
 def GetAndWriteFileData(fileName, currentID, dataURL):
-    print("Request " + fileName)
+    print("Request Name: " + fileName + " ID: " + currentID)
     path = "./ZeroFiles/task_files/"
 
     fullPath = path + str(currentID) + fileName[-4:]
@@ -147,6 +147,8 @@ def GetAndWriteFileData(fileName, currentID, dataURL):
             handle.write(block)
 
 
+phab_tasks_fileName = "phab_tasks_resolved.json"
+
 #If the seriailized JSON file of tasks already exists delete it
 if(os.path.exists(phab_tasks_fileName)):
     os.remove(phab_tasks_fileName)
@@ -164,10 +166,11 @@ taskFile = open(phab_tasks_fileName, "r")
 fileIDs = GetFileIDs(taskFile)
 taskFile.close()
 
+print("Download IDs: " + str(fileIDs))
 #Download all files found in tasks
 idsToFileNames = DownloadFilesFromPhabricator(fileIDs)
 
 #Serialize File extensions mapped to fileIDs for when we are replacing by ID
-fileIDFile = open("fileIDToFileExt.json", "w")
+fileIDFile = open("fileIDToFileExt_resolved.json", "w")
 fileIDFile.write(json.dumps(fileIDToFileExt))
 fileIDFile.close()
